@@ -1,0 +1,13 @@
+# Cấu hình thông tin của dự án: Tên dự án và Profile nào sẽ được sử dụng
+name: 'my_game_transform'
+version: '1.0.0'
+config-version: 2
+
+profile: 'my_game_dbt_profile' # Phải khớp với tên trong profiles.yml
+
+model-paths: ["models"]
+
+models:
+  my_game_transform:
+    marts:
+      materialized: table # Mặc định các model trong folder marts sẽ là table

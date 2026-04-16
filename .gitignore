@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+.env
+logs/
+keys/
+
+# Python rác
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Bảo mật (QUAN TRỌNG NHẤT)
+.env
+keys/
+*.json
+
+# Airflow rác (Dữ liệu phát sinh khi chạy)
+logs/
+plugins/
+airflow-webserver.pid
+standalone_admin_password.txt
+
+# SQLite (Nếu bạn chạy db mặc định không qua Postgres Docker)
+*.db
+
+# Docker & OS rác
+.DS_Store
+Thumbs.db

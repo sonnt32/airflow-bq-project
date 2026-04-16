@@ -1,0 +1,14 @@
+# Config kết nối để DBT hoạt động
+my_game_dbt_profile: # Tên profile (phải trùng với khai báo trong dbt_project.yml)
+  target: dev        # Môi trường chạy mặc định
+  outputs:
+    dev:
+      type: bigquery
+      method: service-account
+      project: annoying-puzzle        # Google Cloud Project ID của bạn
+      dataset: stg                    # Tên Dataset nơi dbt sẽ tạo bảng
+      threads: 4                      # Số lượng truy vấn chạy song song (tối ưu là 4-8)
+      keyfile: /root/.google/annoying-puzzle.json # Đường dẫn ĐÃ COPY vào trong Docker
+      location: US                    # Khu vực lưu trữ dữ liệu (US, EU, hoặc asia-southeast1)
+      priority: interactive
+      retries: 1
