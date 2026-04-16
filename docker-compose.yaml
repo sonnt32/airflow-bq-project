@@ -11,7 +11,7 @@ x-airflow-common:
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./keys:/opt/airflow/keys
-    # - ./airflow-db:/opt/airflow
+    # - ./airflow-db:/opt/airflow and not
   user: "${AIRFLOW_UID}:0"
 
 services:
