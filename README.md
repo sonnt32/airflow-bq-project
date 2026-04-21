@@ -23,8 +23,8 @@ airflow-bq-project/
 ├── dags/
 │   └── merge_dag.py                # Workflow orchestration & scheduling
 ├── sql/
-│   ├── stg_events_initialization.sql # Schema init & Incremental Staging load
-│   └── fct_daily_game_metrics.sql    # Daily KPI aggregation (DAU, Events/User)
+│   ├── flatten_raw.sql     # Schema init & Incremental Staging load
+│   └── event_base.sql      # Daily KPI aggregation (DAU, Events/User)
 ├── keys/                           # Service Account JSON (Git-ignored)
 ├── airflow-db/                     # Airflow metadata configuration
 ├── docker-compose.yaml             # Container orchestration
