@@ -27,3 +27,4 @@ standalone_admin_password.txt
 # Docker & OS rác
 .DS_Store
 Thumbs.db
+airflow-db/

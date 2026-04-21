@@ -1,33 +1,45 @@
-version: '3'
+version: '3.8'
 x-airflow-common:
   &airflow-common
   image: apache/airflow:2.8.1
   environment:
-    AIRFLOW__CORE__EXECUTOR: SequentialExecutor
+    # 1. Chuyển sang LocalExecutor để chạy nhiều Task song song (Tốt cho 20 dự án)
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    # 2. Kết nối tới Database Postgres riêng biệt
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@postgres/airflow
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
+    AIRFLOW_UID: ${AIRFLOW_UID:-50000}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./sql:/opt/airflow/sql
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ./keys:/opt/airflow/keys
-    # - ./airflow-db:/opt/airflow and not
   user: "${AIRFLOW_UID}:0"
 
 services:
+  # DATABASE RIÊNG BIỆT: Giúp lưu Connection cực kỳ ổn định
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow
+      POSTGRES_DB: airflow
+    volumes:
+      - ./airflow-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   airflow-init:
     <<: *airflow-common
+    depends_on:
+      postgres:
+        condition: service_healthy
     command: >
-      bash -c "
-      airflow db init &&
-      airflow users create
-      --username airflow
-      --password airflow
-      --firstname admin
-      --lastname admin
-      --role Admin
-      --email admin@example.com
-      "
+      bash -c "airflow db init && airflow users create --username airflow --password airflow --firstname admin --lastname admin --role Admin --email admin@example.com"
 
   airflow-webserver:
     <<: *airflow-common
@@ -35,7 +47,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully
 
   airflow-scheduler:
     <<: *airflow-common
