@@ -16,6 +16,9 @@ x-airflow-common: &airflow-common
     - ./plugins:/opt/airflow/plugins
     - /var/run/docker.sock:/var/run/docker.sock
     - ../shared_keys:/opt/airflow/shared_keys
+    # Obby 1 Layer 2 build (gen_layer2.py + bq_guard) — DAG obby1_layer2_build, độc lập dbt_core
+    - ../layer2_projects:/opt/airflow/layer2_projects
+    - ../scripts:/opt/airflow/scripts:ro
   networks:
     - airflow_network
   depends_on:

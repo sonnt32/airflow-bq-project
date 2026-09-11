@@ -1,0 +1,38 @@
+version: 2
+
+sources:
+  - name: obby1_layer2
+    project: suvival-master-obby-parkour
+    dataset: obby1_layer2
+    description: "Layer 2 per-event tables — build bởi layer2_projects/obby1/gen_layer2.py + bq_guard (DAG obby1_layer2_build), KHÔNG phải dbt model."
+
+    tables:
+      - name: evt_ad_impression
+      - name: evt_ad_request_failed
+      - name: evt_ad_request_success
+      - name: evt_ad_reward
+      - name: evt_ad_show_complete
+      - name: evt_ad_show_failed
+      - name: evt_ad_start_show
+      - name: evt_app_exception
+      - name: evt_app_request_show_ad
+      - name: evt_app_update
+      - name: evt_checkpoint_reached
+      - name: evt_click_change_outfit_button
+      - name: evt_click_quest_button
+      - name: evt_click_shop_button
+      - name: evt_enter_home
+      - name: evt_enter_survival_mode_lobby
+      - name: evt_exit_survival_mode_lobby
+      - name: evt_firebase_campaign
+      - name: evt_first_open
+      - name: evt_item_click
+      - name: evt_level_end
+      - name: evt_level_start
+      - name: evt_loading
+      - name: evt_mode_clicked
+      - name: evt_os_update
+      - name: evt_session_start
+      - name: evt_survial_session_end
+      - name: evt_survial_session_start
+      - name: evt_user_engagement

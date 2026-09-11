@@ -61,6 +61,22 @@ GAME_CONFIGS = {
             # "bm_fact_behavior",     # → marts
         ],
     },
+    "obby1": {
+        "gcp_project": "suvival-master-obby-parkour",
+        "dataset":     "obby1_layer2",
+        "location":    "US",
+        "keyfile":     "obby1-key.json",
+        "description": "dbt marts R2-R8 — Obby 1 (đọc từ Layer 2 evt_*, build riêng bởi DAG obby1_layer2_build)",
+        "folder":      "obby1",
+        "models": [
+            "r2_minigame_full",
+            "r3_funnel_monet_ltv",
+            "r4_cohort_ltv",
+            "r5_daily_ad_monetization",
+            "r6_retention_curve",
+            "r8_minigame_play_duration",
+        ],
+    },
     # --- Thêm game mới: copy block trên, đổi giá trị ---
     # "game_b": {
     #     "gcp_project": "game-b-gcp-project",

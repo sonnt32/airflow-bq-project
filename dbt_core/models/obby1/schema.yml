@@ -1,0 +1,92 @@
+version: 2
+
+models:
+  - name: r2_minigame_full
+    description: >
+      Minigame Analysis đầy đủ: start rate, playtime, ad impressions, revenue, eCPM —
+      1 dòng / (version x minigame_id). Vars: versions (array), max_session_min (float, default 20).
+      Transform từ raw "Minigame Analysis — Query B". Verify: lệch raw ~0.4-0.8% (do version
+      suy ra từ evt_session_start thay vì app_info.version từng dòng — xem comment trong file).
+    columns:
+      - name: version
+      - name: minigame_id
+      - name: start_user
+      - name: start_rate_pct
+      - name: unique_users
+      - name: total_sessions
+      - name: avg_playtime_per_user_min
+      - name: avg_playtime_per_session_min
+      - name: total_ad_impressions
+      - name: total_revenue_usd
+      - name: avg_revenue_per_user_usd
+      - name: ecpm
+
+  - name: r3_funnel_monet_ltv
+    description: >
+      New User Funnel Monetization + LTV D0/D3/D7 theo version. Vars: versions (array),
+      exclude_geo (array, default ['China']). Verify: khớp raw 100%.
+    columns:
+      - name: version
+        tests: [unique, not_null]
+      - name: avg_dau
+      - name: avg_new_users
+      - name: ecpm
+      - name: arpdau
+      - name: ltv_d0
+      - name: ltv_d3
+      - name: ltv_d7
+
+  - name: r4_cohort_ltv
+    description: >
+      Cohort LTV D0/D1/D3/D7 theo (version x cohort_date). Vars: versions, exclude_geo.
+      Verify: khớp raw. is_d7_mature=false nghĩa là D7 chưa đủ ngày quan sát (right-censored).
+    columns:
+      - name: version
+      - name: cohort_date
+      - name: new_users
+      - name: ltv_d0
+      - name: ltv_d1
+      - name: ltv_d3
+      - name: ltv_d7
+      - name: is_d7_mature
+
+  - name: r5_daily_ad_monetization
+    description: >
+      Dashboard ad hàng ngày: imp/DAU, viewer rate, eCPM, ARPDAU, cohort_rr_d1.
+      Vars: versions, cohort_event ('first_open' | 'session_start').
+      Verify: eCPM từng format khớp raw. active = evt_session_start (chuẩn Data Foundation,
+      KHÔNG dùng user_engagement như bản raw gốc).
+    columns:
+      - name: date
+        tests: [unique, not_null]
+      - name: active_user
+      - name: total_imp_per_dau
+      - name: arpdau
+      - name: cohort_rr_d1
+
+  - name: r6_retention_curve
+    description: >
+      Retention D1-D7 theo (version x cohort_date). Vars: versions.
+      is_d7_mature=false nghĩa là D7 chưa đủ ngày quan sát.
+    columns:
+      - name: version
+      - name: cohort_date
+      - name: new_users
+      - name: d1_retention
+      - name: d7_retention
+      - name: is_d7_mature
+
+  - name: r8_minigame_play_duration
+    description: >
+      Play duration & win/lose/quit rate theo (version x minigame_id). Vars: versions.
+      Verify: khớp raw 100%. result thực tế = win/lose/quit (không có 'back'/'next' như game
+      level-based khác).
+    columns:
+      - name: version
+      - name: minigame_id
+      - name: users_start
+      - name: users_end
+      - name: complete_rate_pct
+      - name: win_rate_pct
+      - name: lose_rate_pct
+      - name: quit_rate_pct

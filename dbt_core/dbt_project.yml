@@ -16,6 +16,17 @@ target-path: "target"
 clean-targets: ["target", "dbt_packages"]
 
 # ============================================================
+# Vars mặc định cho models/obby1 (R2-R8) khi không truyền --vars.
+# Ghi đè lúc chạy: dbt run --select r3_funnel_monet_ltv --vars '{"versions": ["1.0.8"]}'
+# Không ảnh hưởng annoying_puzzle/brainy_master — 2 game đó không dùng vars.
+# ============================================================
+vars:
+  versions: []                 # [] = mọi version
+  exclude_geo: ['China']       # dùng cho R3/R4
+  cohort_event: 'first_open'   # dùng cho R5: 'first_open' | 'session_start'
+  max_session_min: 20          # dùng cho R2
+
+# ============================================================
 # Cấu hình mặc định cho toàn bộ project
 #
 # +schema: stg → tất cả models mặc định vào dataset "stg"
@@ -42,6 +53,11 @@ models:
   brainy_master:
     +materialized: incremental
     +schema: stg
+
+  # --- Game 3: Obby 1 ---
+  obby1:
+    +materialized: table   # marts full-rebuild (không incremental, khác 2 game kia)
+    +schema: reports        # -> dataset obby1_layer2_reports (qua macro generate_schema_name)
 
   # --- Thêm game mới: copy block, đổi tên ---
   # game_b:
