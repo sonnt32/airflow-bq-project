@@ -1,0 +1,23 @@
+# ============================================================
+# profiles.yml — dùng chung cho MỌI dbt project trong projects/*.
+#
+# Không chứa secret: project/dataset/keyfile đều được inject qua biến môi
+# trường lúc container chạy (xem airflow_platform/dags/dag_factory.py ->
+# build_env_vars()), KHÔNG hardcode ở đây. An toàn để commit lên Git.
+#
+# service-account key thật (.json) nằm ở shared_keys/ (đã .gitignore), mount
+# vào container lúc runtime — không baked vào image, không nằm trong repo.
+# ============================================================
+multi_game:
+  target: default
+  outputs:
+    default:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('DBT_GCP_PROJECT') }}"
+      dataset: "{{ env_var('DBT_DATASET') }}"
+      location: "{{ env_var('DBT_LOCATION', 'US') }}"
+      keyfile: "{{ env_var('DBT_KEYFILE_PATH') }}"
+      threads: 4
+      job_execution_timeout_seconds: 300
+      job_retries: 1

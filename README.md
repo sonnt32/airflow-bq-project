@@ -1,107 +1,115 @@
-# 🎮 dbt_airflow_master — Airflow vận hành dbt trên Docker
+# 🎮 airflow-bq-project — Airflow vận hành nhiều dbt project trên Docker
 
-> **Giai đoạn học tập:** Airflow vận hành 1 dự án dbt  
-> **Tác giả:** Son Nguyen  
-> **Dữ liệu:** Google Analytics 4 (Firebase) → BigQuery → dbt transform  
+> **Tác giả:** Son Nguyen
+> **Dữ liệu:** Google Analytics 4 (Firebase) → BigQuery → dbt transform
 > **Môi trường:** Docker Desktop (Windows)
 
 ---
 
 ## 📌 Mục đích dự án
 
-Đây là dự án **thực hành thứ 3** trong lộ trình học Data Engineering cá nhân:
+Pipeline ELT cho nhiều game (GA4 → BigQuery → dbt), vận hành tự động bởi
+1 Airflow instance dùng chung. Kiến trúc trung tâm là **"engine dùng chung,
+config riêng từng game"**, áp dụng ở cả 2 tầng dbt và Airflow, để:
 
-| Giai đoạn | Nội dung | Trạng thái |
-|---|---|---|
-| 1 | dbt vận hành 1 dự án | ✅ Hoàn thành |
-| 2 | dbt vận hành nhiều dự án | ✅ Hoàn thành |
-| 3 | **Airflow vận hành 1 dự án dbt** | ✅ Dự án này |
-| 4 | Airflow vận hành nhiều dự án dbt | 🔜 Kế hoạch tiếp theo |
+- Thêm game mới không phải viết lại hạ tầng (Docker image, DAG factory,
+  script build Layer 2).
+- Mỗi game vẫn **độc lập hoàn toàn**: sửa/thêm SQL, đổi tên model, hoặc lỗi
+  cú pháp ở 1 game không ảnh hưởng game khác — kể cả khi tất cả chạy chung
+  1 Docker image và 1 Airflow instance.
 
-Mục tiêu cụ thể của dự án này:
-- Hiểu cách **Docker** đóng gói và cô lập môi trường dbt và Airflow
-- Hiểu cách **Airflow Scheduler + LocalExecutor** điều phối pipeline tự động
-- Hiểu cách **DockerOperator** kết nối Airflow với dbt container
-- Xây dựng pipeline transform dữ liệu GA4 game mobile thực tế từ BigQuery
+Hiện có 3 game: `annoying_puzzle`, `brainy_master` (dbt trực tiếp trên GA4
+raw export), `obby1` (thêm 1 lớp Layer 2 trung gian trước dbt — xem phần
+Layer 2 bên dưới).
 
 ---
 
 ## 🏗️ Kiến trúc hệ thống
 
 ```
-BigQuery (Nguồn dữ liệu thô)
-    └── analytics_485408210.events_intraday_*
-              │
-              │  source() — khai báo trong source.yml
-              ▼
-┌─────────────────────────────────────────────┐
-│         dbt_core  (Docker Image)            │
-│                                             │
-│  event_flatten_raw.sql                      │
-│  ├── Làm phẳng event_params (UNNEST)        │
-│  ├── Tạo surrogate_key (MD5)                │
-│  └── Incremental + Partition by date        │
-│              │                              │
-│              │  ref() — tự động thứ tự      │
-│              ▼                              │
-│  event_base.sql                             │
-│  ├── Bảng tổng hợp cốt lõi                 │
-│  └── Incremental + Partition by date        │
-│              │                              │
-│              ▼                              │
-│  dbt test — schema.yml                      │
-│  └── unique + not_null trên surrogate_key   │
-└─────────────────────────────────────────────┘
-              ▲
-              │  DockerOperator — gọi dbt container
-              │
-┌─────────────────────────────────────────────┐
-│       airflow_platform  (Docker Compose)    │
-│                                             │
-│  Webserver  ──  Scheduler  ──  Postgres     │
-│                     │                       │
-│              DAG: annoying_puzzle_pipeline  │
-│              Schedule: 0 1 * * * (8h VN)   │
-│                                             │
-│  Task 1: dbt run event_flatten_raw          │
-│  Task 2: dbt run event_base          (>>)   │
-│  Task 3: dbt test                    (>>)   │
-└─────────────────────────────────────────────┘
+BigQuery (GA4 raw export, mỗi game 1 GCP project riêng)
+    │
+    │ source()
+    ▼
+┌───────────────────────────────────────────────────────────┐
+│ dbt_core  (1 Docker image: dbt-core:latest)                │
+│                                                             │
+│  projects/annoying_puzzle/   ← dbt project ĐỘC LẬP          │
+│  projects/brainy_master/     ← dbt project ĐỘC LẬP          │
+│  projects/obby1/             ← dbt project ĐỘC LẬP          │
+│  macros_shared/              ← 1 nguồn, copy vào macros/    │
+│                                 của mỗi project lúc build   │
+└───────────────────────────────────────────────────────────┘
+                     ▲
+                     │ DockerOperator: dbt run/test --project-dir /dbt/projects/<game>
+                     │
+┌───────────────────────────────────────────────────────────┐
+│ airflow_platform  (Docker Compose)                          │
+│                                                             │
+│  dag_factory.py → GAME_CONFIGS{} → 1 DAG / game tự động     │
+│    <game>_dbt_pipeline: create_stg/marts_dataset            │
+│                          → dbt run (1 task/model) → dbt test│
+│    Pool "dbt_docker_pool" giới hạn số container dbt         │
+│    chạy song song, bất kể thêm bao nhiêu game                │
+│                                                             │
+│  obby1_layer2_build (riêng, không qua dag_factory):          │
+│    gen_layer2.py (layer2_toolkit) → bq_guard.py → BigQuery   │
+└───────────────────────────────────────────────────────────┘
 ```
+
+### Vì sao mỗi game là 1 dbt project riêng (không dồn chung 1 project)
+
+dbt luôn parse **toàn bộ** file `.sql` trong `model-paths` để dựng dependency
+graph, bất kể `--select` chọn model nào. Nếu mọi game dùng chung 1
+`dbt_project.yml`/`models/`, một lỗi cú pháp hoặc đổi tên model ở game A vẫn
+làm `dbt run`/`dbt test` của game B thất bại — vi phạm nguyên tắc "chung hạ
+tầng nhưng độc lập". Giải pháp: mỗi game có `dbt_project.yml` + `models/`
+riêng dưới `dbt_core/projects/<game>/`, Airflow gọi đúng project bằng
+`--project-dir`. Macro dùng chung (`macros_shared/`) được nhân bản vào
+`macros/` của từng project **lúc build image** (không phải mount runtime) nên
+mỗi project trong container vẫn tự chứa đủ để chạy một mình.
+
+Quy ước đặt tên model vẫn giữ tiền tố theo game (`ap_`, `bm_`, `ob1_`) như một
+lớp phòng vệ thêm và giúp truy vết trên BigQuery, dù không còn bắt buộc để
+tránh xung đột kỹ thuật (đã được `--project-dir` đảm bảo).
+
+**Ràng buộc bắt buộc:** mỗi game 1 GCP project riêng. Macro
+`generate_schema_name` (trong `macros_shared/`) bỏ qua dataset gốc, chỉ dùng
+đúng tên schema khai báo (`stg`/`marts`) — nên 2 game share chung 1 GCP
+project sẽ đụng dataset.
 
 ---
 
 ## 📁 Cấu trúc thư mục
 
 ```
-dbt_airflow_master/
+airflow-bq-project/
 │
-├── .env                          # Biến môi trường (KHÔNG commit lên Git)
-├── .gitignore                    # Bảo vệ credential và file tự sinh
+├── dbt_core/
+│   ├── Dockerfile                 # Build 1 image chứa mọi project (copy-at-build)
+│   ├── profiles.yml               # Dùng chung mọi project — không chứa secret, AN TOÀN commit
+│   ├── macros_shared/             # Nguồn duy nhất cho macro dùng chung
+│   └── projects/
+│       ├── annoying_puzzle/       # dbt project độc lập
+│       │   ├── dbt_project.yml
+│       │   └── models/
+│       ├── brainy_master/         # dbt project độc lập
+│       └── obby1/                 # dbt project độc lập — đọc từ obby1_layer2.evt_*
 │
-├── dbt_core/                     # dbt Worker — đóng gói thành Docker Image
-│   ├── Dockerfile                # Công thức build image dbt-annoying-puzzle:latest
-│   ├── dbt_project.yml           # Khai báo project, materialization strategy
-│   ├── profiles.yml              # Thông tin kết nối BigQuery
-│   ├── .dbtignore                # File dbt bỏ qua khi build
-│   └── models/
-│       └── annoying-puzzle/
-│           ├── source.yml        # Khai báo nguồn BigQuery (wildcard table)
-│           ├── schema.yml        # Data quality tests
-│           ├── staging/          # (Dự kiến) Tầng làm sạch dữ liệu thô
-│           └── marts/
-│               ├── event_flatten_raw.sql   # Làm phẳng GA4 event_params
-│               └── event_base.sql          # Bảng base tổng hợp cốt lõi
+├── airflow_platform/
+│   ├── docker-compose.yaml        # Webserver + Scheduler + Postgres; tạo pool dbt_docker_pool
+│   └── dags/
+│       ├── dag_factory.py         # GAME_CONFIGS{} → sinh DAG *_dbt_pipeline tự động
+│       └── obby1_layer2_build_dag.py  # Build Layer 2 cho Obby 1 (không qua dbt)
 │
-├── airflow_platform/             # Airflow Master — Docker Compose
-│   ├── docker-compose.yaml       # Khởi động Webserver + Scheduler + Postgres
-│   ├── dags/
-│   │   └── annoying_puzzle_dag.py  # Kịch bản điều phối pipeline
-│   ├── logs/                     # Tự động sinh khi Airflow chạy
-│   └── plugins/                  # Để trống, dùng mở rộng sau
+├── layer2_projects/                # Lớp trung gian evt_* cho game cần transform phức tạp
+│   ├── _shared/layer2_toolkit/     # Engine game-agnostic + README onboard game mới
+│   └── obby1/                      # Config + SQL sinh ra riêng của Obby 1
 │
-└── shared_keys/                  # Credential BigQuery (KHÔNG commit lên Git)
-    └── annoying-puzzle-dbt.json  # Google Service Account key
+├── scripts/bq_guard.py             # Cost guard bắt buộc cho mọi query BigQuery ad-hoc
+│
+├── shared_keys/                    # Service account key (KHÔNG commit — .gitignore)
+└── .env                            # Biến môi trường (KHÔNG commit — .gitignore)
 ```
 
 ---
@@ -110,185 +118,113 @@ dbt_airflow_master/
 
 ### Yêu cầu
 
-- Docker Desktop (Windows/Mac/Linux)
-- Git
-- VS Code (khuyến nghị)
-- Google Cloud account với BigQuery dataset GA4
+- Docker Desktop, Git, VS Code (khuyến nghị)
+- Google Cloud account với BigQuery + service account key cho mỗi game
 
-### Bước 1 — Clone và chuẩn bị
+### Bước 1 — Đặt service account key
 
 ```bash
-git clone https://github.com/<your-username>/dbt_airflow_master.git
-cd dbt_airflow_master
+mkdir -p shared_keys
+# copy key thật của từng game vào, đúng tên khai báo trong GAME_CONFIGS
+# (annoying-puzzle-dbt.json, brainy-master-1.json, obby1-key.json)
 ```
 
-### Bước 2 — Cấu hình biến môi trường
-
-Tạo file `.env` từ template:
+### Bước 2 — Build Docker image cho dbt (dùng chung mọi game)
 
 ```bash
-cp .env.example .env
+docker build -f dbt_core/Dockerfile -t dbt-core:latest .
+docker run --rm dbt-core:latest   # kỳ vọng: Core: installed: 1.8.0 | Plugins: bigquery: 1.8.0
 ```
 
-Điền thông tin vào `.env`:
-
-```env
-GCP_PROJECT_ID=your-gcp-project-id
-GCP_DATASET=your_dataset_name
-GCP_LOCATION=US
-KEYFILE_PATH=/dbt/keys/your-service-account.json
-AIRFLOW_UID=50000
-AIRFLOW__CORE__EXECUTOR=LocalExecutor
-AIRFLOW__CORE__LOAD_EXAMPLES=False
-```
-
-### Bước 3 — Đặt file Service Account key
-
-```bash
-# Đặt file JSON key vào thư mục shared_keys/
-# File này đã được .gitignore bảo vệ
-cp /path/to/your-service-account.json shared_keys/annoying-puzzle-dbt.json
-```
-
-### Bước 4 — Build Docker image cho dbt
-
-```bash
-# Chạy từ thư mục gốc dbt_airflow_master/
-docker build \
-  -f dbt_core/Dockerfile \
-  -t dbt-annoying-puzzle:latest \
-  .
-```
-
-Kiểm tra build thành công:
-
-```bash
-docker run --rm dbt-annoying-puzzle:latest
-# Kết quả đúng: Core: installed: 1.8.0 | Plugins: bigquery: 1.8.0
-```
-
-### Bước 5 — Khởi động Airflow
+### Bước 3 — Khởi động Airflow
 
 ```bash
 cd airflow_platform
-
-# Lần đầu: khởi tạo database và tạo user admin
-docker compose run --rm airflow-init
-
-# Khởi động toàn bộ Airflow
+docker compose run --rm airflow-init   # tạo DB, user admin, pool dbt_docker_pool
 docker compose up -d
 ```
 
-### Bước 6 — Truy cập Airflow UI
+### Bước 4 — Truy cập Airflow UI
 
 ```
-URL:      http://localhost:8080
-Username: admin
-Password: admin
+http://localhost:8080   (admin / admin)
 ```
 
-Tìm DAG `annoying_puzzle_dbt_pipeline` → bật toggle → click **▶ Trigger DAG**
+Mỗi game trong `GAME_CONFIGS` xuất hiện thành 1 DAG `<game>_dbt_pipeline` —
+bật toggle và trigger. Obby 1 có thêm DAG `obby1_layer2_build` chạy trước
+(06:30 sáng VN) để build dữ liệu Layer 2 mà `obby1_dbt_pipeline` sẽ đọc.
 
 ---
 
-## ⚙️ Cấu hình chi tiết
+## ➕ Thêm game mới
 
-### dbt_project.yml — Materialization Strategy
+**Game chỉ cần dbt trực tiếp trên GA4 raw** (như annoying_puzzle/brainy_master):
 
-| Tầng | Kiểu | Lý do |
-|---|---|---|
-| `marts/event_flatten_raw` | `incremental` | Dữ liệu GA4 lớn — chỉ xử lý dữ liệu mới |
-| `marts/event_base` | `incremental` | Phụ thuộc vào flatten — chạy sau |
+1. Tạo `dbt_core/projects/<game>/` với `dbt_project.yml` + `models/` riêng
+   (copy từ `projects/annoying_puzzle/` làm mẫu, đổi `name:`, source, schema).
+2. Thêm 1 entry vào `GAME_CONFIGS` trong `airflow_platform/dags/dag_factory.py`
+   — `project_name` (key của dict) phải khớp đúng tên thư mục ở bước 1.
+3. Rebuild image dbt (`docker build ...`) — Dockerfile tự động copy macro
+   dùng chung vào project mới, không cần sửa Dockerfile.
 
-**Incremental logic:**
-- Lần đầu (`full-refresh`): quét 2 ngày gần nhất
-- Các lần sau: chỉ quét 2 ngày gần nhất, bỏ qua surrogate_key đã tồn tại
+**Game cần lớp Layer 2 trung gian** (như obby1): làm thêm theo hướng dẫn
+trong [`layer2_projects/_shared/layer2_toolkit/README.md`](layer2_projects/_shared/layer2_toolkit/README.md)
+trước khi làm 3 bước trên.
 
-### DAG Schedule
-
-```python
-schedule_interval='0 1 * * *'
-# Chạy lúc 01:00 UTC = 08:00 sáng giờ Việt Nam (UTC+7)
-# Mỗi ngày một lần, tự động
-```
-
-### Thứ tự Task trong DAG
-
-```
-dbt_run_event_flatten_raw
-        >>
-dbt_run_event_base
-        >>
-dbt_test
-```
-
-Thứ tự này được đảm bảo bởi `ref('event_flatten_raw')` trong SQL của `event_base` — dbt tự hiểu phụ thuộc và Airflow thực thi đúng thứ tự.
+Không sửa gì khác — không đụng tới project dbt hay DAG của game đang chạy.
 
 ---
 
 ## 🔒 Bảo mật
 
-Các file sau **tuyệt đối không được commit** lên Git:
+Không bao giờ commit: `.env`, `shared_keys/`, file key dạng
+`*-key.json` / `*-dbt.json` / `*service-account*.json` (xem `.gitignore`).
+`dbt_core/profiles.yml` AN TOÀN để commit — chỉ chứa template `env_var()`,
+giá trị thật được inject lúc container chạy bởi `dag_factory.build_env_vars()`.
 
-```gitignore
-.env                  # Chứa biến môi trường nhạy cảm
-shared_keys/          # Chứa Google Service Account key
-*.json                # Tránh lộ bất kỳ file JSON credential nào
-```
-
-Để chia sẻ dự án, dùng `.env.example` (không chứa giá trị thật):
-
-```env
-GCP_PROJECT_ID=
-GCP_DATASET=
-GCP_LOCATION=
-KEYFILE_PATH=
-AIRFLOW_UID=50000
-```
+Mọi truy vấn BigQuery ad-hoc (ngoài pipeline dbt) phải qua
+`scripts/bq_guard.py` — dry-run ước lượng chi phí trước, chặn nếu vượt
+ngưỡng, ghi log audit.
 
 ---
 
 ## 🧠 Kiến thức kỹ thuật đã áp dụng
 
-### Docker
-- `Dockerfile` — đóng gói dbt và dependencies thành image tái sử dụng
-- `docker-compose.yaml` — orchestrate nhiều service (Webserver, Scheduler, Postgres)
-- Build context — hiểu cách Docker copy file từ host vào image
-
-### Apache Airflow
-- **DAG** — định nghĩa workflow dưới dạng code Python
-- **DockerOperator** — gọi container độc lập từ bên trong DAG
-- **LocalExecutor** — chạy task song song trong cùng máy với Scheduler
-- **schedule_interval** — cron expression để lên lịch tự động
-
 ### dbt
-- **Incremental model** — chỉ xử lý dữ liệu mới, tiết kiệm chi phí BigQuery
-- **Surrogate key** — MD5 hash để nhận diện và dedup dữ liệu
-- **source()** — khai báo bảng nguồn, tách biệt với model
-- **ref()** — quản lý phụ thuộc giữa các model tự động
-- **Partition + Cluster** — tối ưu chi phí query BigQuery
-- **dbt test** — kiểm tra chất lượng dữ liệu tự động (unique, not_null)
 
-### BigQuery / GA4
-- Wildcard table `events_intraday_*` với `_TABLE_SUFFIX`
-- UNNEST array — làm phẳng `event_params` lồng nhau
-- `SELECT AS STRUCT` — nhóm nhiều phép tính trong một lần UNNEST
+- **Multi-project trong 1 image**: mỗi game 1 `dbt_project.yml` độc lập,
+  chọn qua `--project-dir` — cô lập lỗi/đổi tên giữa các game.
+- **generate_schema_name override**: dataset đúng bằng tên schema khai báo,
+  không nối thêm dataset gốc (đổi lại: bắt buộc 1 GCP project / game).
+- **Incremental + partition + cluster** cho staging (annoying_puzzle,
+  brainy_master); **table full-rebuild** cho marts đọc từ Layer 2 (obby1).
+- **Surrogate key** (MD5) để dedup; **source()/ref()** quản lý phụ thuộc.
+
+### Airflow
+
+- **DAG factory pattern**: `GAME_CONFIGS` là nguồn sự thật duy nhất, DAG sinh
+  tự động — thêm game không sửa code factory.
+- **DockerOperator** cô lập môi trường dbt khỏi container Airflow.
+- **Pool** giới hạn số container dbt chạy song song, không phụ thuộc số
+  lượng game đã thêm.
+
+### Layer 2 (obby1 và các game tương tự sau này)
+
+- Engine game-agnostic (`l2_generator.py`) + config riêng từng game
+  (`game_config.py`) — xem `layer2_projects/_shared/layer2_toolkit/README.md`.
+- Pattern **insert-only theo partition** (`CREATE IF NOT EXISTS` → `DELETE`
+  đúng ngày → `INSERT`) — không bao giờ `CREATE OR REPLACE TABLE`.
 
 ---
 
 ## 🔜 Kế hoạch phát triển tiếp theo
 
-**Giai đoạn 4 — Airflow vận hành nhiều dự án dbt:**
-- Thêm nhiều game project vào cùng một Airflow instance
-- Mỗi game có DAG riêng, dbt project riêng, BigQuery dataset riêng
-- Dùng Airflow Variables/Connections để quản lý cấu hình tập trung
-- Xem xét chuyển sang `CeleryExecutor` khi số lượng task tăng lên
-
-**Cải thiện hệ thống hiện tại:**
-- Thêm tầng `staging/` để làm sạch dữ liệu thô trước khi vào marts
-- Thêm Slack/Email alerting khi DAG thất bại
-- Chuyển credential sang Google Secret Manager cho môi trường production
-- Viết thêm `accepted_values` test cho `event_name` trong schema.yml
+- CI tối thiểu: `dbt parse`/`dbt compile` cho từng project trong PR, bắt lỗi
+  cú pháp trước khi merge (đặc biệt hữu ích khi số project tăng).
+- Slack/Email alerting khi DAG thất bại.
+- Chuyển credential sang Google Secret Manager cho môi trường production.
+- Cân nhắc CeleryExecutor nếu số game tăng đủ lớn để LocalExecutor + pool
+  không còn đủ song song.
 
 ---
 
@@ -298,7 +234,3 @@ AIRFLOW_UID=50000
 - [Apache Airflow Documentation](https://airflow.apache.org/docs/)
 - [GA4 BigQuery Export Schema](https://support.google.com/analytics/answer/7029846)
 - [Docker Documentation](https://docs.docker.com)
-
----
-
-*Dự án này được xây dựng như một phần trong lộ trình học Data Engineering cá nhân — từ dbt đơn lẻ đến hệ thống pipeline tự động hóa hoàn chỉnh với Airflow.*

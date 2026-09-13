@@ -52,7 +52,9 @@ services:
   airflow-init:
     <<: *airflow-common
     command: >
-      bash -c "airflow db migrate && airflow users create --username admin --password admin --firstname Son --lastname Nguyen --role Admin --email admin@example.com"
+      bash -c "airflow db migrate &&
+               airflow users create --username admin --password admin --firstname Son --lastname Nguyen --role Admin --email admin@example.com &&
+               airflow pools set dbt_docker_pool 2 'Giới hạn số container dbt (DockerOperator) chạy song song trên Docker host, dùng chung cho mọi game'"
 
   airflow-webserver:
     <<: *airflow-common

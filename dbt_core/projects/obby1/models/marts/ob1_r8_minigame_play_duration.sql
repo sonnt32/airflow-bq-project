@@ -1,7 +1,7 @@
 -- R8 — Minigame Play Duration & Result Rate (win/lose/quit) per minigame x version
--- Xem PLAYBOOK.md (layer2/sql/reusable/) cho định nghĩa/verify đầy đủ.
+-- Xem PLAYBOOK.md (layer2_projects/obby1/sql/reusable/) cho định nghĩa/verify đầy đủ.
 -- Input qua dbt vars: versions
---   dbt run --select r8_minigame_play_duration --vars '{"versions": ["1.0.8","1.0.9"]}'
+--   dbt run --select ob1_r8_minigame_play_duration --vars '{"versions": ["1.0.8","1.0.9"]}'
 
 {{
   config(

@@ -1,0 +1,30 @@
+name: 'annoying_puzzle'
+version: '1.0.0'
+
+require-dbt-version: ">=1.5.0"
+
+profile: 'multi_game'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# ============================================================
+# Project ĐỘC LẬP với brainy_master/obby1 — dbt chỉ parse model-paths bên
+# trong thư mục này. Thêm/sửa SQL ở đây không đụng tới project khác.
+#
+# +schema: stg → mọi model mặc định vào dataset "stg" trong GCP project
+# annoying-puzzle (xem GAME_CONFIGS trong airflow_platform/dags/dag_factory.py).
+# Macro generate_schema_name (macros_shared/, copy vào macros/ lúc build image)
+# đảm bảo dùng đúng "stg" thay vì nối thêm dataset gốc.
+# ============================================================
+models:
+  annoying_puzzle:
+    +materialized: incremental
+    +schema: stg

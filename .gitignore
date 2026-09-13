@@ -1,7 +1,11 @@
 # === BẢO MẬT - Không bao giờ commit ===
+# *.json thu hẹp còn tên file key thật (thay vì chặn MỌI json trong repo —
+# sẽ vô tình nuốt config json hợp lệ thêm sau này, vd game_config json mới).
 .env
 shared_keys/
-*.json
+*-key.json
+*-dbt.json
+*service-account*.json
 
 # === Airflow tự sinh ra - không cần commit ===
 airflow_platform/logs/
@@ -19,4 +23,3 @@ __pycache__/
 target/
 dbt_packages/
 logs/
-profiles.yml

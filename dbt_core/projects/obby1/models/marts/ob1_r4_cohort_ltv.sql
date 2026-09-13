@@ -1,7 +1,7 @@
 -- R4 — New User Cohort LTV D0/D1/D3/D7 theo cohort_date
--- Xem PLAYBOOK.md (layer2/sql/reusable/) cho định nghĩa/verify đầy đủ.
+-- Xem PLAYBOOK.md (layer2_projects/obby1/sql/reusable/) cho định nghĩa/verify đầy đủ.
 -- Input qua dbt vars: versions, exclude_geo
---   dbt run --select r4_cohort_ltv --vars '{"versions": ["1.0.8","1.0.9"]}'
+--   dbt run --select ob1_r4_cohort_ltv --vars '{"versions": ["1.0.8","1.0.9"]}'
 
 {{
   config(

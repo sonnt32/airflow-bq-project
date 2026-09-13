@@ -5,15 +5,31 @@ Pipeline mỗi game:
     Task 0a: create_stg_dataset       ← tạo dataset 'stg' nếu chưa có
     Task 0b: create_marts_dataset     ← tạo dataset 'marts' nếu chưa có
         (0a và 0b chạy song song)
-    Task 1:  dbt_run_{flatten_model}  ← flatten raw GA4 events → stg
-    Task 2:  dbt_run_{base_model}     ← build base table → stg
-    Task 3+: dbt_run_{mart_models}    ← aggregate models → marts
+    Task 1:  dbt_run_{model}          ← 1 task / model, theo thứ tự khai báo
     Task N:  dbt_test                 ← kiểm tra data quality
 
-Để thêm game mới: chỉ thêm 1 entry vào GAME_CONFIGS.
-Convention đặt tên model: {prefix}_{model_name}
-    ap_ = annoying-puzzle
-    bm_ = brainy-master
+Để thêm game mới:
+    1. Tạo dbt project riêng: dbt_core/projects/<project_name>/
+       (dbt_project.yml + models/) — xem dbt_core/projects/annoying_puzzle/
+       làm mẫu. KHÔNG copy models vào project khác.
+    2. Thêm 1 entry vào GAME_CONFIGS bên dưới.
+    Không cần sửa gì khác trong file này.
+
+CÔ LẬP GIỮA CÁC GAME:
+    Mỗi game là 1 dbt project riêng, build vào 1 image dùng chung
+    (dbt-core:latest) nhưng chạy qua `--project-dir /dbt/projects/<project>`.
+    dbt chỉ parse SQL bên trong project-dir được chỉ định -> thêm/sửa model
+    hoặc lỗi cú pháp ở project A không ảnh hưởng project B (không giống cách
+    dồn hết model vào 1 project rồi lọc bằng --select, vốn vẫn parse toàn bộ
+    file .sql của mọi game).
+
+    Convention đặt tên model vẫn giữ prefix theo game (phòng vệ thêm, không
+    bắt buộc để tránh xung đột kỹ thuật nhưng giúp truy vết trên BigQuery):
+    ap_ = annoying-puzzle | bm_ = brainy-master | ob1_ = obby1
+
+    Ràng buộc bắt buộc: mỗi game 1 GCP project riêng (xem macro
+    generate_schema_name trong dbt_core/macros_shared/) — dataset "stg"/
+    "marts" không có tiền tố nên 2 game share chung GCP project sẽ đụng dataset.
 """
 
 from datetime import datetime, timedelta
@@ -28,9 +44,15 @@ import os
 # ============================================================
 SHARED_KEYS_HOST_PATH      = os.environ.get("SHARED_KEYS_PATH", "")
 SHARED_KEYS_CONTAINER_PATH = "/opt/airflow/shared_keys"
+DBT_PROJECTS_CONTAINER_DIR = "/dbt/projects"
+
+# Giới hạn số container dbt chạy song song trên cùng máy Docker host, bất kể
+# thêm bao nhiêu game (pool được tạo trong airflow-init, xem docker-compose.yaml).
+DBT_DOCKER_POOL = "dbt_docker_pool"
 
 # ============================================================
 # GAME REGISTRY — Thêm game mới vào đây
+# "project_name" PHẢI khớp đúng tên thư mục dbt_core/projects/<project_name>/
 # ============================================================
 GAME_CONFIGS = {
     "annoying_puzzle": {
@@ -39,7 +61,7 @@ GAME_CONFIGS = {
         "location":    "US",
         "keyfile":     "annoying-puzzle-dbt.json",
         "description": "dbt pipeline GA4 — Annoying Puzzle",
-        "folder":      "annoying-puzzle",
+        "schedule":    "0 1 * * *",   # 08:00 sáng giờ VN
         "models": [
             "ap_event_flatten_raw",   # → stg
             "ap_event_base",          # → stg
@@ -54,7 +76,7 @@ GAME_CONFIGS = {
         "location":    "US",
         "keyfile":     "brainy-master-1.json",
         "description": "dbt pipeline GA4 — Brainy Master",
-        "folder":      "brainy-master-1",
+        "schedule":    "3 1 * * *",   # 08:03 sáng giờ VN — lệch 3' so với game khác, tránh dồn container dbt cùng lúc
         "models": [
             "bm_event_flatten_raw",   # → stg
             "bm_event_base",          # → stg
@@ -67,24 +89,24 @@ GAME_CONFIGS = {
         "location":    "US",
         "keyfile":     "obby1-key.json",
         "description": "dbt marts R2-R8 — Obby 1 (đọc từ Layer 2 evt_*, build riêng bởi DAG obby1_layer2_build)",
-        "folder":      "obby1",
+        "schedule":    "6 1 * * *",   # 08:06 sáng giờ VN — chạy sau obby1_layer2_build (06:30 VN)
         "models": [
-            "r2_minigame_full",
-            "r3_funnel_monet_ltv",
-            "r4_cohort_ltv",
-            "r5_daily_ad_monetization",
-            "r6_retention_curve",
-            "r8_minigame_play_duration",
+            "ob1_r2_minigame_full",
+            "ob1_r3_funnel_monet_ltv",
+            "ob1_r4_cohort_ltv",
+            "ob1_r5_daily_ad_monetization",
+            "ob1_r6_retention_curve",
+            "ob1_r8_minigame_play_duration",
         ],
     },
-    # --- Thêm game mới: copy block trên, đổi giá trị ---
+    # --- Thêm game mới: copy block trên, đổi giá trị + tạo dbt_core/projects/<project_name>/ ---
     # "game_b": {
     #     "gcp_project": "game-b-gcp-project",
     #     "dataset":     "analytics_XXXXXXXXX",
     #     "location":    "US",
     #     "keyfile":     "game-b-dbt.json",
     #     "description": "dbt pipeline GA4 — Game B",
-    #     "folder":      "game-b",
+    #     "schedule":    "9 1 * * *",
     #     "models":      ["gb_event_flatten_raw", "gb_event_base"],
     # },
 }
@@ -134,7 +156,7 @@ def _create_dataset_if_not_exists(gcp_project, location, keyfile_name, dataset_n
 
 
 def make_dbt_task(dag, task_id, dbt_command, env_vars):
-    """Tạo 1 DockerOperator task chạy lệnh dbt."""
+    """Tạo 1 DockerOperator task chạy lệnh dbt, giới hạn qua DBT_DOCKER_POOL."""
     return DockerOperator(
         task_id=task_id,
         image=DBT_IMAGE,
@@ -145,6 +167,7 @@ def make_dbt_task(dag, task_id, dbt_command, env_vars):
         mount_tmp_dir=False,
         environment=env_vars,
         dag=dag,
+        pool=DBT_DOCKER_POOL,
         mounts=[
             Mount(
                 source=SHARED_KEYS_HOST_PATH,
@@ -155,10 +178,9 @@ def make_dbt_task(dag, task_id, dbt_command, env_vars):
     )
 
 
-def build_env_vars(project_name: str, config: dict) -> dict:
+def build_env_vars(config: dict) -> dict:
     """Tạo env vars inject vào dbt container."""
     return {
-        "DBT_PROJECT_NAME": project_name,
         "DBT_GCP_PROJECT":  config["gcp_project"],
         "DBT_DATASET":      config["dataset"],
         "DBT_LOCATION":     config.get("location", "US"),
@@ -173,15 +195,15 @@ def create_dag(project_name: str, config: dict) -> DAG:
         dag_id=f"{project_name}_dbt_pipeline",
         default_args=DEFAULT_ARGS,
         description=config["description"],
-        schedule_interval="0 1 * * *",  # 08:00 sáng giờ VN
+        schedule_interval=config.get("schedule", "0 1 * * *"),
         start_date=datetime(2026, 4, 23),
         catchup=False,
         tags=["dbt", "ga4", project_name],
     )
 
-    env_vars      = build_env_vars(project_name, config)
-    folder        = config["folder"]
-    profiles_flag = "--profiles-dir /dbt"
+    env_vars    = build_env_vars(config)
+    project_dir = f"{DBT_PROJECTS_CONTAINER_DIR}/{project_name}"
+    dbt_flags   = f"--profiles-dir /dbt --project-dir {project_dir}"
 
     # ----------------------------------------------------------
     # Task 0a + 0b: Kiểm tra và tạo dataset nếu chưa tồn tại
@@ -212,25 +234,26 @@ def create_dag(project_name: str, config: dict) -> DAG:
     )
 
     # ----------------------------------------------------------
-    # Task 1..N: dbt run từng model theo thứ tự
+    # Task 1..N: dbt run từng model theo thứ tự, --project-dir cô lập
+    # riêng project của game này (không đụng project khác)
     # ----------------------------------------------------------
     dbt_tasks = []
     for model_name in config["models"]:
         task = make_dbt_task(
             dag=dag,
             task_id=f"dbt_run_{model_name}",
-            dbt_command=f"dbt run --select {model_name} {profiles_flag}",
+            dbt_command=f"dbt run --select {model_name} {dbt_flags}",
             env_vars=env_vars,
         )
         dbt_tasks.append(task)
 
     # ----------------------------------------------------------
-    # Task cuối: dbt test
+    # Task cuối: dbt test — project-dir đã tự giới hạn đúng model của game này
     # ----------------------------------------------------------
     test_task = make_dbt_task(
         dag=dag,
         task_id="dbt_test",
-        dbt_command=f"dbt test --select {folder} {profiles_flag}",
+        dbt_command=f"dbt test {dbt_flags}",
         env_vars=env_vars,
     )
     dbt_tasks.append(test_task)

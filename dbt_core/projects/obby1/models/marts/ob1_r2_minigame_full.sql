@@ -1,7 +1,7 @@
 -- R2 — Minigame Analysis đầy đủ (start rate/playtime/revenue/eCPM per minigame x version)
--- Xem PLAYBOOK.md (layer2/sql/reusable/) cho định nghĩa/verify đầy đủ.
+-- Xem PLAYBOOK.md (layer2_projects/obby1/sql/reusable/) cho định nghĩa/verify đầy đủ.
 -- Input qua dbt vars: versions, max_session_min
---   dbt run --select r2_minigame_full --vars '{"versions": ["1.0.8","1.0.9"]}'
+--   dbt run --select ob1_r2_minigame_full --vars '{"versions": ["1.0.8","1.0.9"]}'
 
 {{
   config(

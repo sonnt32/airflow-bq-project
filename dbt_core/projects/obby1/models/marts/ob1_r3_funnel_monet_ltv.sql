@@ -1,7 +1,7 @@
 -- R3 — New User Funnel Monetization + LTV D0/D3/D7
--- Xem PLAYBOOK.md (layer2/sql/reusable/) cho định nghĩa/verify đầy đủ.
+-- Xem PLAYBOOK.md (layer2_projects/obby1/sql/reusable/) cho định nghĩa/verify đầy đủ.
 -- Input qua dbt vars: versions, exclude_geo
---   dbt run --select r3_funnel_monet_ltv --vars '{"versions": ["1.0.8","1.0.9"]}'
+--   dbt run --select ob1_r3_funnel_monet_ltv --vars '{"versions": ["1.0.8","1.0.9"]}'
 
 {{
   config(

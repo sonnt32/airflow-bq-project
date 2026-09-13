@@ -1,7 +1,7 @@
 -- R5 — Daily Ad Monetization Dashboard
--- Xem PLAYBOOK.md (layer2/sql/reusable/) cho định nghĩa/verify đầy đủ.
+-- Xem PLAYBOOK.md (layer2_projects/obby1/sql/reusable/) cho định nghĩa/verify đầy đủ.
 -- Input qua dbt vars: versions, cohort_event
---   dbt run --select r5_daily_ad_monetization --vars '{"versions": ["1.0.8","1.0.9"]}'
+--   dbt run --select ob1_r5_daily_ad_monetization --vars '{"versions": ["1.0.8","1.0.9"]}'
 
 {{
   config(

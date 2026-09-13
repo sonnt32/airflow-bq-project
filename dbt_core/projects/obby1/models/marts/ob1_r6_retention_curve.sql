@@ -1,7 +1,7 @@
 -- R6 — Retention Curve D1-D7 theo cohort_date
--- Xem PLAYBOOK.md (layer2/sql/reusable/) cho định nghĩa/verify đầy đủ.
+-- Xem PLAYBOOK.md (layer2_projects/obby1/sql/reusable/) cho định nghĩa/verify đầy đủ.
 -- Input qua dbt vars: versions
---   dbt run --select r6_retention_curve --vars '{"versions": ["1.0.8","1.0.9"]}'
+--   dbt run --select ob1_r6_retention_curve --vars '{"versions": ["1.0.8","1.0.9"]}'
 
 {{
   config(

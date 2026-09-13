@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: r2_minigame_full
+  - name: ob1_r2_minigame_full
     description: >
       Minigame Analysis đầy đủ: start rate, playtime, ad impressions, revenue, eCPM —
       1 dòng / (version x minigame_id). Vars: versions (array), max_session_min (float, default 20).
@@ -21,7 +21,7 @@ models:
       - name: avg_revenue_per_user_usd
       - name: ecpm
 
-  - name: r3_funnel_monet_ltv
+  - name: ob1_r3_funnel_monet_ltv
     description: >
       New User Funnel Monetization + LTV D0/D3/D7 theo version. Vars: versions (array),
       exclude_geo (array, default ['China']). Verify: khớp raw 100%.
@@ -36,7 +36,7 @@ models:
       - name: ltv_d3
       - name: ltv_d7
 
-  - name: r4_cohort_ltv
+  - name: ob1_r4_cohort_ltv
     description: >
       Cohort LTV D0/D1/D3/D7 theo (version x cohort_date). Vars: versions, exclude_geo.
       Verify: khớp raw. is_d7_mature=false nghĩa là D7 chưa đủ ngày quan sát (right-censored).
@@ -50,7 +50,7 @@ models:
       - name: ltv_d7
       - name: is_d7_mature
 
-  - name: r5_daily_ad_monetization
+  - name: ob1_r5_daily_ad_monetization
     description: >
       Dashboard ad hàng ngày: imp/DAU, viewer rate, eCPM, ARPDAU, cohort_rr_d1.
       Vars: versions, cohort_event ('first_open' | 'session_start').
@@ -64,7 +64,7 @@ models:
       - name: arpdau
       - name: cohort_rr_d1
 
-  - name: r6_retention_curve
+  - name: ob1_r6_retention_curve
     description: >
       Retention D1-D7 theo (version x cohort_date). Vars: versions.
       is_d7_mature=false nghĩa là D7 chưa đủ ngày quan sát.
@@ -76,7 +76,7 @@ models:
       - name: d7_retention
       - name: is_d7_mature
 
-  - name: r8_minigame_play_duration
+  - name: ob1_r8_minigame_play_duration
     description: >
       Play duration & win/lose/quit rate theo (version x minigame_id). Vars: versions.
       Verify: khớp raw 100%. result thực tế = win/lose/quit (không có 'back'/'next' như game
